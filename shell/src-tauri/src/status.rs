@@ -36,14 +36,41 @@ pub struct Status {
     pub paused: bool,
     /// Outside the set hours (Settings → Folders): when they begin ("01:00").
     pub held_until: Option<String>,
+    /// When the index helper started and when it last said anything (ms since the epoch): the helper's first sync walks
+    /// every folder and says nothing until it's done, so a long silence is shown rather than guessed at.
+    pub helper_started: Option<u64>,
+    pub last_event: Option<u64>,
+    /// The file being read: its path and kind.
+    pub current: Option<(String, String)>,
+    /// The pass under way: when it began and the count it began at, for the time left.
+    pass: Option<(u64, u64)>,
+}
+
+/// Milliseconds since the epoch.
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |since| since.as_millis() as u64)
 }
 
 impl Status {
     /// An index-service event (`Sources/digup/IndexService.swift`); events about the code index don't count here.
     pub fn apply(&mut self, event: &Value) {
+        self.apply_at(event, now_ms());
+    }
+
+    /// The index helper was asked to work: its start counts only the first time (a running helper is just told to sync
+    /// again), until it exits.
+    pub fn helper_started_at(&mut self, now: u64) {
+        if self.helper_started.is_none() {
+            self.helper_started = Some(now);
+            self.last_event = None;
+        }
+    }
+
+    fn apply_at(&mut self, event: &Value, now: u64) {
         if event["code"] == true {
             return;
         }
+        self.last_event = Some(now);
         let count = |key: &str| event[key].as_u64().unwrap_or(0);
         if event["files"].is_u64() {
             self.files = count("files");
@@ -56,7 +83,15 @@ impl Status {
             // A sync after a failure: the helper works again.
             "sync" if matches!(self.activity, Activity::Failed(_)) => self.activity = Activity::Idle,
             "file" => {
-                self.activity = Activity::Indexing { done: count("done"), total: count("total") };
+                let done = count("done");
+                // A new pass starts at a count below the last one's (the sync's few files, then the backfill's).
+                if !matches!(self.activity, Activity::Indexing { done: before, .. } if before <= done) || self.pass.is_none() {
+                    self.pass = Some((now, done.saturating_sub(1)));
+                }
+                if let (Some(path), Some(kind)) = (event["path"].as_str(), event["kind"].as_str()) {
+                    self.current = Some((path.to_string(), kind.to_string()));
+                }
+                self.activity = Activity::Indexing { done, total: count("total") };
                 // The counts come with a sync; each file read since leaves "waiting".
                 self.pending = self.pending.saturating_sub(1);
                 if matches!(event["state"].as_str(), Some("done" | "partial")) {
@@ -66,7 +101,11 @@ impl Status {
             "rest" => {
                 self.activity = Activity::Finishing { done: count("done"), total: count("total"), files: count("files") }
             }
-            "idle" | "waiting" => self.activity = Activity::Idle,
+            "idle" | "waiting" => {
+                self.activity = Activity::Idle;
+                self.current = None;
+                self.pass = None;
+            }
             "missing" => {
                 let paths = |key: &str| -> Vec<String> {
                     event[key].as_array().into_iter().flatten().filter_map(Value::as_str).map(String::from).collect()
@@ -80,6 +119,9 @@ impl Status {
                 if matches!(self.activity, Activity::Starting | Activity::Indexing { .. } | Activity::Finishing { .. }) {
                     self.activity = Activity::Idle;
                 }
+                self.helper_started = None;
+                self.current = None;
+                self.pass = None;
             }
             _ => {}
         }
@@ -179,13 +221,64 @@ impl Status {
         })
     }
 
-    /// What the pages show: the line, the progress, the caveat, and the counts.
-    pub fn snapshot(&self, has_folders: bool, model: &Value) -> Value {
+    /// Where DigUp is on the way from a fresh start to searchable, for the progress the pages draw:
+    /// nofolders · model · measuring · starting · scanning · indexing · finishing · paused · held · idle · failed.
+    /// "scanning" is the index helper's first sync, which walks the folders and says nothing until it's done.
+    pub fn phase(&self, has_folders: bool, model: &Value) -> &'static str {
+        if !has_folders {
+            return "nofolders";
+        }
+        if matches!(self.activity, Activity::Failed(_)) {
+            return "failed";
+        }
+        if download_line(model).is_some() {
+            return "model";
+        }
+        if self.measuring {
+            return "measuring";
+        }
+        if self.paused {
+            return "paused";
+        }
+        if self.held_until.is_some() {
+            return "held";
+        }
+        match self.activity {
+            Activity::Starting if self.helper_started.is_some() => "scanning",
+            Activity::Starting => "starting",
+            Activity::Indexing { .. } => "indexing",
+            Activity::Finishing { .. } => "finishing",
+            _ => "idle",
+        }
+    }
+
+    /// Seconds the index helper has been quiet while it should be at work (since it started, or its last event).
+    pub fn quiet_secs(&self, now: u64) -> Option<u64> {
+        let since = self.last_event.or(self.helper_started)?;
+        matches!(self.activity, Activity::Starting | Activity::Indexing { .. } | Activity::Finishing { .. })
+            .then(|| now.saturating_sub(since) / 1000)
+    }
+
+    /// Seconds left in the pass under way, once it has read enough to go by.
+    pub fn eta_secs(&self, now: u64) -> Option<u64> {
+        let (Activity::Indexing { done, total }, Some((began, first))) = (&self.activity, self.pass) else { return None };
+        let (read, elapsed) = (done.saturating_sub(first), now.saturating_sub(began));
+        (read >= 3 && elapsed >= 5_000 && total >= done).then(|| elapsed * (total - done) / read / 1000)
+    }
+
+    /// What the pages show: the line, the progress, the caveat, and the counts. `estimating` is the number of folder
+    /// estimates running (setup's list).
+    pub fn snapshot(&self, has_folders: bool, model: &Value, estimating: usize, now: u64) -> Value {
         let indexing = match self.activity {
             Activity::Indexing { done, total } => json!({"done": done, "total": total}),
             _ => Value::Null,
         };
         json!({
+            "phase": self.phase(has_folders, model),
+            "estimating": estimating,
+            "quietSecs": self.quiet_secs(now),
+            "etaSecs": self.eta_secs(now),
+            "current": self.current.as_ref().map(|(path, kind)| json!({"path": path, "kind": kind})),
             "line": self.line(has_folders, model),
             "progress": self.progress(model),
             "caveat": self.caveat(model),
@@ -285,6 +378,47 @@ mod tests {
         held.held_until = None;
         held.paused = true;
         assert_eq!(held.line(true, &ready), "Paused · 4 files waiting");
+    }
+
+    #[test]
+    fn phases() {
+        let ready = json!({"state": "ready"});
+        let mut status = Status::default();
+        assert_eq!(status.phase(false, &ready), "nofolders");
+        assert_eq!(status.phase(true, &json!({"state": "downloading", "bytes": 1.0, "total": 2.0})), "model");
+        assert_eq!(status.phase(true, &ready), "starting");
+        status.measuring = true;
+        assert_eq!(status.phase(true, &ready), "measuring");
+        status.measuring = false;
+
+        // The helper's first sync walks every folder and says nothing until it's done: the silence is counted.
+        status.helper_started_at(1_000);
+        assert_eq!(status.phase(true, &ready), "scanning");
+        assert_eq!(status.quiet_secs(61_000), Some(60));
+        status.apply_at(&json!({"event": "sync", "new": 100, "files": 100, "searchable": 0, "pending": 100}), 70_000);
+        assert_eq!(status.phase(true, &ready), "indexing");
+        assert_eq!(status.quiet_secs(75_000), Some(5));
+
+        // No time left is promised before it has read a few files and a few seconds have gone.
+        let file = |done: u64, at: u64, status: &mut Status| {
+            status.apply_at(&json!({"event": "file", "done": done, "total": 100, "path": "C:\\a.png", "kind": "image"}), at)
+        };
+        file(1, 71_000, &mut status);
+        assert_eq!(status.eta_secs(72_000), None);
+        for done in 2..=11 {
+            file(done, 71_000 + done * 1000, &mut status);
+        }
+        assert_eq!(status.eta_secs(82_000), Some(89));
+        assert_eq!(status.current, Some(("C:\\a.png".into(), "image".into())));
+
+        status.paused = true;
+        assert_eq!(status.phase(true, &ready), "paused");
+        status.paused = false;
+        status.apply_at(&json!({"event": "idle", "files": 100, "searchable": 100, "pending": 0, "unfinished": 0}), 90_000);
+        assert_eq!(status.phase(true, &ready), "idle");
+        assert_eq!((status.current.clone(), status.quiet_secs(99_000), status.eta_secs(99_000)), (None, None, None));
+        status.apply_at(&json!({"event": "exit"}), 91_000);
+        assert_eq!(status.helper_started, None);
     }
 
     #[test]

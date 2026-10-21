@@ -66,6 +66,8 @@ struct Shell {
     model_state: Mutex<Value>,
     /// What indexing is doing, from the index helper's events (status.rs).
     status: Mutex<Status>,
+    /// The phase the snapshot last reported (status.rs's `phase`) and when it began, in ms since the epoch.
+    phase_mark: Mutex<(String, u64)>,
     watcher: Mutex<Option<FolderWatcher>>,
     /// Code search's folders, watched apart: their changes reach the code index a minute after the code goes quiet.
     code_watcher: Mutex<Option<FolderWatcher>>,
@@ -225,7 +227,17 @@ impl Shell {
     /// What the pages show about indexing and the model (status.rs).
     fn snapshot(&self) -> Value {
         let model = self.model_state.lock().unwrap().clone();
-        let mut snapshot = self.status.lock().unwrap().snapshot(!self.folders().is_empty(), &model);
+        let now = status::now_ms();
+        let mut snapshot = self.status.lock().unwrap().snapshot(
+            !self.folders().is_empty(), &model, self.estimating.load(Ordering::SeqCst), now);
+        // Since when it has been in this phase: the pages tell how long a step has taken.
+        let phase = snapshot["phase"].as_str().unwrap_or_default().to_string();
+        let mut mark = self.phase_mark.lock().unwrap();
+        if mark.0 != phase {
+            *mark = (phase, now);
+        }
+        snapshot["phaseSince"] = json!(mark.1);
+        drop(mark);
         snapshot["hasCode"] = json!(!self.code_folders().is_empty());
         snapshot["update"] = self.updates.snapshot();
         snapshot
@@ -736,6 +748,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         watcher: Mutex::new(None),
         code_watcher: Mutex::new(None),
         status: Mutex::new(Status::default()),
+        phase_mark: Mutex::new((String::new(), status::now_ms())),
         status_item: Mutex::new(None),
         index_item: Mutex::new(None),
         pause_item: Mutex::new(None),
@@ -907,8 +920,12 @@ fn run_index(app: &AppHandle) {
     if !may_index(&shell) {
         return;
     }
-    if let Err(error) = shell.index.run(&shell.index_launch()) {
-        set_status(app, &format!("Indexing couldn't start: {error}"));
+    match shell.index.run(&shell.index_launch()) {
+        Ok(_) => {
+            shell.status.lock().unwrap().helper_started_at(status::now_ms());
+            changed(app);
+        }
+        Err(error) => set_status(app, &format!("Indexing couldn't start: {error}")),
     }
 }
 
