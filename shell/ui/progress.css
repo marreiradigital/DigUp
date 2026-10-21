@@ -1,0 +1,138 @@
+/* The progress card (progress.js): what the window's home tells while DigUp prepares itself and reads the folders. It
+   lives inside `.center`, whose paragraph rules are narrower and greyer than it wants, hence the `.pg` before each one. */
+
+.pg {
+  width: 100%;
+  max-width: 520px;
+  margin-top: 24px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pane);
+}
+
+.pg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.center .pg-title { margin: 0; max-width: none; font-size: 15px; font-weight: 650; text-align: left; }
+.pg-time { font-size: 12px; color: var(--secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The steps: a dot each, joined by a line that is lit up to the one under way. */
+.pg-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+.pg-steps li {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--tertiary);
+}
+.pg-steps .label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pg-steps .dot { position: relative; z-index: 1; width: 10px; height: 10px; border-radius: 50%; background: var(--fill-strong); }
+.pg-steps li:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--fill-strong);
+}
+.pg-steps li.done:not(:first-child)::before,
+.pg-steps li.active:not(:first-child)::before { background: var(--leaf); }
+.pg-steps li.done { color: var(--secondary); }
+.pg-steps li.done .dot { background: var(--leaf); }
+.pg-steps li.active { color: var(--text); font-weight: 600; }
+.pg-steps li.active .dot { background: var(--amber); box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 28%, transparent); }
+
+.pg-body { display: flex; flex-direction: column; gap: 10px; }
+.pg .pg-line { max-width: none; margin: 0; font-size: 13px; line-height: 1.4; color: var(--text); }
+.pg .pg-line strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+.pg .pg-sub { max-width: none; margin: 0; font-size: 12px; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.pg .pg-note { max-width: none; margin: 0; font-size: 12px; line-height: 1.5; color: var(--secondary); }
+
+.pg-bar { height: 8px; border-radius: 99px; background: var(--fill); overflow: hidden; }
+.pg-bar .fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--leaf), var(--amber));
+  transition: width 0.4s ease;
+}
+/* No count to go by (a walk of the folders): a band sliding across says it's at work, and no more than that. */
+.pg-bar.unknown .fill { width: 35%; animation: pg-slide 1.6s ease-in-out infinite; }
+@keyframes pg-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  .pg-bar.unknown .fill { width: 100%; animation: none; opacity: 0.3; }
+  .pg-bar .fill { transition: none; }
+}
+
+.pg-now { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: none; margin: 0; font-size: 12px; }
+.pg-now .tag { flex: none; padding: 2px 8px; border-radius: 99px; background: var(--chip); color: var(--leaf-text); font-weight: 600; }
+.pg-now .file { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary); }
+
+.pg-folders {
+  list-style: none;
+  margin: 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pg-folder { display: flex; flex-direction: column; gap: 6px; }
+.pg-folder .head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.pg-folder .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pg-folder .count { flex: none; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.pg-mini { height: 4px; border-radius: 99px; background: var(--fill); overflow: hidden; }
+.pg-mini .fill { height: 100%; border-radius: inherit; background: var(--leaf); transition: width 0.4s ease; }
+
+.pg .pg-kinds { max-width: none; margin: 0; font-size: 12px; line-height: 1.5; color: var(--secondary); font-variant-numeric: tabular-nums; }
+
+.pg-warn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--amber) 38%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--amber) 13%, transparent);
+}
+.pg .pg-warn p { max-width: none; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+.pg-warn button {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.pg-warn button:hover { background: var(--fill); }
+
+/* The window's "nothing found" while files are still unread: why, and the way to the card above. */
+.unread-hint { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.center .unread-hint p { max-width: 420px; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--secondary); }
+.unread-hint button {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.unread-hint button:hover { background: var(--fill); }
+
+/* The home with the card on it: the mark and the line under it give way, so the card fits a short window. */
+.home.with-progress .mark, .home.with-progress .mark img { width: 56px; height: 56px; }
+.home.with-progress .mark::before { left: -122px; top: -122px; }
+.home.with-progress h1 { margin-top: 12px; font-size: 20px; }
+.home.with-progress > p { display: none; }

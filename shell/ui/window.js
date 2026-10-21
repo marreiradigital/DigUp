@@ -50,6 +50,8 @@ const state = {
   info: { folders: [], hotkey: null, hasCode: false },
   app: {},              // indexing and the model, from the shell (status.rs): line, progress, caveat, counts
   indexed: null,        // files indexed of each kind (the home)
+  summaries: [],        // what's read of each folder (the search service's summaries): the progress card's folders
+  card: null,           // the progress card on the home (progress.js), while there is one
 };
 let debugPending = false;
 
@@ -435,8 +437,17 @@ function home() {
   }
   box.append(brandMark(), element("h1", "", "Describe it. Dig it up."),
              element("p", "", "Type what you remember in the search field above: what's in it, what it looks or sounds "
-                     + "like, or words from it."),
-             element("div", "try", "TRY"), examples, about());
+                     + "like, or words from it."));
+  // While DigUp prepares or reads the folders: where it is, rather than a home that looks ready and finds nothing.
+  state.card?.stop();
+  state.card = null;
+  if (DigUpProgress.needed(state.app)) {
+    state.card = DigUpProgress.create({ openSettings: () => invoke("choose_folders").catch(failed) });
+    state.card.update(state.app, state.summaries);
+    box.append(state.card.node);
+    box.classList.add("with-progress");
+  }
+  box.append(element("div", "try", "TRY"), examples, about());
   box.onmousedown = (event) => { if (!event.target.closest("button")) event.preventDefault(); };
   box.onclick = (event) => { if (!event.target.closest("button")) $query.focus(); };
   return box;
@@ -509,9 +520,22 @@ function chooseFolders() {
 function nothingFound() {
   const icon = element("div", "quiet-icon");
   icon.innerHTML = isCode() ? ICONS.code : SEARCH_ICON;
-  return centered(icon, element("h3", "", `No good matches for “${state.query.trim()}”`),
-                  element("p", "", isCode() ? "Try saying what the code does, or a name that's in it."
-                    : "Try describing what's in it: what you'd see or hear, or words you remember."));
+  const box = centered(icon, element("h3", "", `No good matches for “${state.query.trim()}”`),
+                       element("p", "", isCode() ? "Try saying what the code does, or a name that's in it."
+                         : "Try describing what's in it: what you'd see or hear, or words you remember."));
+  // Nothing found may only mean it isn't read yet: say so, and where to see how far it has got.
+  if (!isCode() && DigUpProgress.needed(state.app)) {
+    const read = state.app.searchable || 0, total = read + (state.app.pending || 0);
+    const scope = total > 0 ? "seus arquivos (" + read.toLocaleString("pt-BR") + " de " + total.toLocaleString("pt-BR") + " até agora)"
+      : "as pastas pela primeira vez";
+    const hint = element("div", "unread-hint");
+    hint.append(element("p", "", "O DigUp ainda está lendo " + scope + ", então o que você procura pode não ter entrado na busca."));
+    const show = element("button", "", "Ver o progresso");
+    show.onclick = () => setQuery("");
+    hint.append(show);
+    box.append(hint);
+  }
+  return box;
 }
 
 /// "code:" with nothing after it (what to type), or without code folders (what code search is).
@@ -857,8 +881,21 @@ function actions(hit) {
 
 // MARK: The status bar
 
+/// The progress card on the home, kept up with the shell's snapshot: drawn when there's something to tell, gone when
+/// everything is read, and redrawn in place between.
+function refreshProgress() {
+  if (!$content.querySelector(".home")) return;
+  const needed = DigUpProgress.needed(state.app);
+  if (needed === Boolean(state.card)) {
+    state.card?.update(state.app, state.summaries);
+    return;
+  }
+  renderContent();
+}
+
 function renderStatus() {
   const app = state.app;
+  refreshProgress();
   $("status-line").textContent = app.line || "";
   const ring = $("ring");
   ring.hidden = app.progress == null;
@@ -1113,8 +1150,10 @@ function loadIndexed() {
         for (const [kind, count] of Object.entries(root.kinds || {})) kinds[kind] = (kinds[kind] || 0) + count;
       }
       state.indexed = kinds;
+      state.summaries = reply.roots || [];
       if (!state.query.trim() && state.info.folders.length) {
         $content.querySelector(".about")?.replaceWith(about());
+        state.card?.update(state.app, state.summaries);
       }
     } catch {
       // The home goes without the counts.
