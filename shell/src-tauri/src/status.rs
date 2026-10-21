@@ -143,6 +143,10 @@ impl Status {
             return "Checking this computer's speed…".into();
         }
         match self.activity {
+            // The helper's first sync walks every folder and says nothing until it's done: say that it's at it.
+            Activity::Starting if self.helper_started.is_some() && !self.paused && self.held_until.is_none() => {
+                "Lendo as pastas…".into()
+            }
             // Held or paused, no index helper runs to say it has started: what's indexed stands.
             Activity::Starting if !self.paused && self.held_until.is_none() => "Starting…".into(),
             Activity::Indexing { done, total } => format!("Indexing {}% · {} of {}", percent(done, total), number(done), number(total)),
@@ -394,6 +398,7 @@ mod tests {
         // The helper's first sync walks every folder and says nothing until it's done: the silence is counted.
         status.helper_started_at(1_000);
         assert_eq!(status.phase(true, &ready), "scanning");
+        assert_eq!(status.line(true, &ready), "Lendo as pastas…");
         assert_eq!(status.quiet_secs(61_000), Some(60));
         status.apply_at(&json!({"event": "sync", "new": 100, "files": 100, "searchable": 0, "pending": 100}), 70_000);
         assert_eq!(status.phase(true, &ready), "indexing");
