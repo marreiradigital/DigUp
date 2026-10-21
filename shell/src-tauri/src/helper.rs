@@ -409,3 +409,70 @@ mod job {
         }
     }
 }
+
+/// A child's whole standard output, read while it's waited for; `None` when `cancelled` says so first, and the child is
+/// ended. The output is read on a thread of its own (a long answer would fill the pipe and stall the child); that
+/// thread is let go of when the child is ended, since a grandchild holding the pipe could keep it from finishing.
+pub fn output_unless(mut child: Child, cancelled: impl Fn() -> bool) -> std::io::Result<Option<Vec<u8>>> {
+    use std::io::Read;
+    let Some(mut stdout) = child.stdout.take() else { return Ok(Some(Vec::new())) };
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        bytes
+    });
+    loop {
+        if child.try_wait()?.is_some() {
+            return Ok(Some(reader.join().unwrap_or_default()));
+        }
+        if cancelled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::time::Instant;
+
+    /// A process that outlives the test unless it's ended: ping on Windows, sleep elsewhere.
+    fn long_running() -> Command {
+        let mut command = if cfg!(windows) { Command::new("ping") } else { Command::new("sleep") };
+        if cfg!(windows) {
+            command.args(["-n", "60", "127.0.0.1"]);
+        } else {
+            command.arg("60");
+        }
+        command.stdout(Stdio::piped()).stderr(Stdio::null());
+        command
+    }
+
+    #[test]
+    fn ends_an_estimate_whose_window_closed() {
+        let child = long_running().spawn().expect("a long-running process");
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let later = cancelled.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            later.store(true, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let output = output_unless(child, || cancelled.load(Ordering::SeqCst)).unwrap();
+        assert!(output.is_none(), "cancelled, so no output");
+        assert!(started.elapsed() < Duration::from_secs(10), "the child was ended, not waited for");
+    }
+
+    #[test]
+    fn reads_what_a_finished_child_said() {
+        let mut command = if cfg!(windows) { Command::new("cmd") } else { Command::new("echo") };
+        command.args(if cfg!(windows) { vec!["/C", "echo", "hello"] } else { vec!["hello"] });
+        let child = command.stdout(Stdio::piped()).spawn().unwrap();
+        let output = output_unless(child, || false).unwrap().expect("not cancelled");
+        assert!(String::from_utf8_lossy(&output).contains("hello"));
+    }
+}

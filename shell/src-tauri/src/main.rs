@@ -27,7 +27,7 @@ use serde_json::{json, Value};
 use settings::Settings;
 use status::Status;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -101,6 +101,9 @@ struct Shell {
     model_rerun: AtomicBool,
     /// Folder estimates running (setup's list): the speed check waits for them, for the same reason.
     estimating: AtomicUsize,
+    /// Bumped when a window that asks for folder estimates closes (`end_estimates_with`): those still walking folders
+    /// for it end, since nothing waits for their answer.
+    estimate_generation: AtomicU64,
     /// A folder was taken out: the next index helper drops its files from the index (`--prune`).
     prune: AtomicBool,
     logs: PathBuf,
@@ -281,12 +284,15 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
 /// pass's seconds, the rest of long files, subfolders. For setup.
 #[tauri::command]
 async fn estimate(shell: State<'_, Arc<Shell>>, folders: Vec<String>, code: Option<bool>) -> Result<Vec<Value>, String> {
+    let shell = shell.inner().clone();
     let helper = shell.options.helper.clone();
     // Code folders: what the code index would read in them (its time and size, repository by repository).
     let code = if code == Some(true) { vec!["--code".to_string()] } else { Vec::new() };
     // The index's costs.json: what indexing costs on this computer, once it has indexed enough.
     let index = shell.index_arguments();
+    let generation = shell.estimate_generation.load(Ordering::SeqCst);
     shell.estimating.fetch_add(1, Ordering::SeqCst);
+    let walking = shell.clone();
     let answers = tauri::async_runtime::spawn_blocking(move || {
         let mut command = std::process::Command::new(&helper);
         command.arg("estimate").args(&folders).args(&index).args(&code).arg("--json");
@@ -298,8 +304,12 @@ async fn estimate(shell: State<'_, Arc<Shell>>, folders: Vec<String>, code: Opti
         let child = command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()
             .map_err(|error| format!("can't run {}: {error}", helper.display()))?;
         helper::adopt(&child);
-        let output = child.wait_with_output().map_err(|error| format!("can't run {}: {error}", helper.display()))?;
-        Ok(String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
+        // Its window closed meanwhile: it ends, rather than go on walking the folders over the indexing.
+        let output = helper::output_unless(child, || walking.estimate_generation.load(Ordering::SeqCst) != generation)
+            .map_err(|error| format!("can't run {}: {error}", helper.display()))?;
+        Ok(output.map_or_else(Vec::new, |bytes| {
+            String::from_utf8_lossy(&bytes).lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
+        }))
     })
     .await;
     shell.estimating.fetch_sub(1, Ordering::SeqCst);
@@ -768,6 +778,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         measuring: AtomicBool::new(false),
         model_rerun: AtomicBool::new(false),
         estimating: AtomicUsize::new(0),
+        estimate_generation: AtomicU64::new(0),
         prune: AtomicBool::new(false),
         logs,
     });
@@ -1183,8 +1194,8 @@ fn show_code_folders(app: &AppHandle) -> tauri::Result<()> {
         .resizable(false)
         .maximizable(false)
         .center()
-        .build()?;
-    Ok(())
+        .build()
+        .map(|window| end_estimates_with(app, &window))
 }
 
 /// The setup window (first launch, and Choose Folders… later). Debug runs that click through it keep it hidden.
@@ -1202,8 +1213,19 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
         .maximizable(false)
         .center()
         .visible(!hidden)
-        .build()?;
-    Ok(())
+        .build()
+        .map(|window| end_estimates_with(app, &window))
+}
+
+/// A window that asks for folder estimates (setup, code folders): when it closes, the estimates still walking folders
+/// for it end. They'd go on over the disk and processor the indexing needs, for a list that's no longer there.
+fn end_estimates_with(app: &AppHandle, window: &tauri::WebviewWindow) {
+    let shell = app.state::<Arc<Shell>>().inner().clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            shell.estimate_generation.fetch_add(1, Ordering::SeqCst);
+        }
+    });
 }
 
 /// Settings: opening at login, centering the panel (where the desktop places windows), and where the shortcut is.
