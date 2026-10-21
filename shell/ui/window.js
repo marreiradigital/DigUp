@@ -1228,6 +1228,7 @@ function report() {
         },
         facts: [...$side.querySelectorAll(".facts .title, .facts .folder, .facts .details, .why .reason span")].map((node) => node.textContent),
         home: $content.querySelector(".home") && [...$content.querySelectorAll(".about .line")].map((line) => line.textContent),
+        progress: $content.querySelector(".pg")?.innerText ?? null,
         status: [$("status-line").textContent, $("count").textContent],
       },
     }).catch(() => {});

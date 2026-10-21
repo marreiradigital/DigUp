@@ -234,6 +234,9 @@ impl Shell {
         let phase = snapshot["phase"].as_str().unwrap_or_default().to_string();
         let mut mark = self.phase_mark.lock().unwrap();
         if mark.0 != phase {
+            if cfg!(debug_assertions) {
+                println!("phase: {} → {phase}", mark.0);
+            }
             *mark = (phase, now);
         }
         snapshot["phaseSince"] = json!(mark.1);
