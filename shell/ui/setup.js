@@ -83,6 +83,7 @@ const selection = {
 
 const rows = [];                 // the folders listed, as the helper spells them
 const estimates = new Map();     // key(folder) → the helper's estimate of it
+const estimateAsked = new Map(); // key(folder) → when its estimate was asked for (ms), until it's answered
 const open = new Set();          // key(folder) of folders showing their subfolders
 const showAll = new Set();       // … showing all of them
 let calibrated = false;          // the times are this computer's (timed with the model, or measured by indexing)
@@ -98,6 +99,7 @@ function addRow(path) {
 async function estimate(paths) {
   if (!paths.length) return;
   estimating += 1;
+  for (const path of paths) if (!estimateAsked.has(key(path))) estimateAsked.set(key(path), Date.now());
   renderFolders();
   try {
     const answers = await invoke("estimate", { folders: paths.map(native), code: codeMode });
@@ -111,6 +113,7 @@ async function estimate(paths) {
   } catch {
     for (const path of paths) estimates.set(key(path), { folder: path, failed: true, files: {}, seconds: 0 });
   }
+  for (const path of paths) estimateAsked.delete(key(path));
   estimating -= 1;
   renderFolders();
 }
@@ -193,10 +196,11 @@ function folderBox(row) {
   if (answer?.failed) text.append(element("div", "counts", "Couldn't look inside it; it can still be searched."));
   else if (answer?.readable === false) text.append(element("div", "counts problem", "Can't read it"));
   else if (part && Object.values(part.files).some((count) => count > 0)) text.append(element("div", "counts", countsText(part.files)));
-  else text.append(element("div", "path", answer ? (Object.keys(answer.files || {}).length ? "Nothing to search in the subfolders checked" : codeMode ? "No code here" : "Nothing DigUp searches in it") : native(row)));
+  else if (!answer) text.append(element("div", "path", "Contando os arquivos desta pasta…"));
+  else text.append(element("div", "path", Object.keys(answer.files || {}).length ? "Nothing to search in the subfolders checked" : codeMode ? "No code here" : "Nothing DigUp searches in it"));
   header.append(disclosure, check, text);
   if (answer && !answer.failed && answer.readable !== false && calibrated) header.append(timeOf(part, mark === "off"));
-  else if (!answer) header.append(element("div", "time", "…"));
+  else if (!answer) header.append(countingTime(row));
   header.onclick = (event) => {
     if (event.target.closest("button, input")) return;
     selection.setFolder(row, mark !== "on");
@@ -215,6 +219,30 @@ function folderBox(row) {
     box.append(list);
   }
   return box;
+}
+
+/// A folder whose files are still being counted: how long it has been at it, ticking (tickCounting) between renders.
+function countingTime(row) {
+  const time = element("div", "time counting", "…");
+  time.dataset.since = String(estimateAsked.get(key(row)) || Date.now());
+  time.title = "Contando os arquivos desta pasta. Pastas grandes levam alguns minutos.";
+  return time;
+}
+
+/// The footer while folders are counted: since when, and that saving doesn't have to wait for it.
+function countingSummary() {
+  const since = Math.min(Date.now(), ...estimateAsked.values());
+  const elapsed = (Date.now() - since) / 1000;
+  const text = `Contando os arquivos das pastas… ${DigUpProgress.duration(elapsed)}`;
+  return elapsed >= 45 ? `${text} · pode salvar sem esperar` : text;
+}
+
+function tickCounting() {
+  if (!estimateAsked.size) return;
+  for (const node of document.querySelectorAll(".time.counting")) {
+    node.textContent = DigUpProgress.duration((Date.now() - Number(node.dataset.since)) / 1000);
+  }
+  renderFooter();
 }
 
 function wholePart(answer) {
@@ -376,7 +404,7 @@ function renderFooter() {
   let summary = "";
   if (PAGES[page] === "folders") {
     if (!selection.folders().length) summary = "Choose at least one folder";
-    else if (estimating > 0 || rows.some((row) => selection.isSearched(row) && !estimates.has(key(row)))) summary = "Looking at your folders…";
+    else if (estimating > 0 || rows.some((row) => selection.isSearched(row) && !estimates.has(key(row)))) summary = countingSummary();
     // Turning code search on: what reading the code takes, and its index.
     else if (codeMode && !info.chosen.length) {
       const total = selectionPart();
@@ -395,6 +423,8 @@ function renderFooter() {
       : `Reading the code: about ${roughDuration(Math.max(1, seconds))}, an index of about ${roughBytes(size)}`;
   }
   $("summary").textContent = summary;
+  $("summary").title = summary.includes("pode salvar")
+    ? "A contagem só serve para estimar o tempo da primeira leitura: salvar já a inicia." : "";
 }
 
 $("next").addEventListener("click", async () => {
@@ -694,7 +724,10 @@ async function start() {
   if (asked >= 0) page = asked;
   render();
   // The time left changes between events.
-  setInterval(() => { if (PAGES[page] === "ready") renderProgress(); }, 1000);
+  setInterval(() => {
+    if (PAGES[page] === "ready") renderProgress();
+    tickCounting();
+  }, 1000);
   if (info.auto) setTimeout(clickThrough, 500);
 }
 

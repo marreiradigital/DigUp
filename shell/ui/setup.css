@@ -89,6 +89,7 @@ h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: 
 .time { flex: none; text-align: right; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .time small { display: block; font-size: 10px; font-weight: 400; color: var(--tertiary); }
 .off .time, .subfolder.off .time, .time.quiet { color: var(--tertiary); }
+.time.counting { color: var(--secondary); font-weight: 400; }
 .subfolders { border-top: 1px solid var(--line); padding: 4px 0 6px; }
 .subfolder { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 34px; }
 .subfolder .name { font-size: 12px; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
