@@ -12,13 +12,13 @@ const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
 const isLinux = /Linux/.test(navigator.platform);
 const MOD = isMac ? "⌘" : "Ctrl+";
-const FILE_MANAGER = isMac ? "Finder" : isWindows ? "Explorer" : "Files";
+const FILE_MANAGER = isMac ? "Finder" : isWindows ? "Explorador de Arquivos" : "gerenciador de arquivos";
 // Pictures every web view shows as they are; anything else (HEIC, TIFF, RAW…) comes as JPEG from the helper.
 const SHOWN_AS_IS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"]);
-const GROUP_OF = { screenshot: "Screenshots", image: "Images", pdf: "Documents", doc: "Documents", video: "Video",
-                   audio: "Audio", code: "Code" };
-const KIND_TITLE = { screenshot: "Screenshot", image: "Image", pdf: "PDF", doc: "Document", audio: "Audio",
-                     video: "Video", code: "Code" };
+const GROUP_OF = { screenshot: "Capturas de tela", image: "Imagens", pdf: "Documentos", doc: "Documentos", video: "Vídeo",
+                   audio: "Áudio", code: "Código" };
+const KIND_TITLE = { screenshot: "Captura de tela", image: "Imagem", pdf: "PDF", doc: "Documento", audio: "Áudio",
+                     video: "Vídeo", code: "Código" };
 
 /// The home folder, for "~/Pictures" (filled in as the page starts).
 let homeFolder = "";
@@ -80,11 +80,11 @@ function codeLine(hit) {
   return hit.segment === "lines" ? Math.max(1, Math.trunc(hit.focus ?? hit.loc ?? 1)) : 1;
 }
 
-/// The lines (or a notebook's cells) of code that matched: "lines 12–40", "cell 3".
+/// The lines (or a notebook's cells) of code that matched: "linhas 12–40", "célula 3".
 function span(hit) {
   if (hit.loc == null) return null;
   const first = Math.trunc(hit.loc), last = Math.trunc(hit.loc_end ?? hit.loc);
-  const what = hit.segment === "cells" ? ["cell", "cells"] : ["line", "lines"];
+  const what = hit.segment === "cells" ? ["célula", "células"] : ["linha", "linhas"];
   return first === last ? `${what[0]} ${first}` : `${what[1]} ${first}–${last}`;
 }
 
@@ -93,37 +93,37 @@ function matchedMeaning(hit) {
   return (hit.z ?? 0) >= 2;
 }
 
-/// Why it's here, in a few words: "Matches the picture", "Matches the frame at 0:06".
+/// Why it's here, in a few words: "Combina com a imagem", "Combina com o quadro em 0:06".
 function reasonOf(hit) {
   const words = hit.keyword_rank != null;
-  if (!matchedMeaning(hit)) return words ? "Has your words" : "Matches its name";
+  if (!matchedMeaning(hit)) return words ? "Tem as suas palavras" : "Combina com o nome";
   const at = hit.loc != null ? clock(hit.loc) : "";
-  const page = hit.loc != null ? `page ${Math.trunc(hit.loc)}` : "a page";
+  const page = hit.loc != null ? Math.trunc(hit.loc) : null;
   switch (hit.segment) {
-    case "image": return hit.kind === "screenshot" ? "Matches what's on screen" : "Matches the picture";
-    case "ocr": return "Matches the text in it";
-    case "frame": return `Matches the frame at ${at}`;
-    case "audio": return hit.kind === "video" ? `Matches the sound at ${at}` : `Matches what's heard at ${at}`;
-    case "page": return `Matches the text on ${page}`;
-    case "page_image": return `Matches ${page}`;
-    case "chunk": return "Matches its text";
+    case "image": return hit.kind === "screenshot" ? "Combina com o que está na tela" : "Combina com a imagem";
+    case "ocr": return "Combina com o texto que há nele";
+    case "frame": return `Combina com o quadro em ${at}`;
+    case "audio": return hit.kind === "video" ? `Combina com o som em ${at}` : `Combina com o que se ouve em ${at}`;
+    case "page": return page != null ? `Combina com o texto da página ${page}` : "Combina com o texto de uma página";
+    case "page_image": return page != null ? `Combina com a página ${page}` : "Combina com uma página";
+    case "chunk": return "Combina com o texto dele";
     case "lines":
-    case "cells": return `Matches ${span(hit) ?? "the code"}`;
-    default: return "Matches its name";
+    case "cells": return `Combina com ${span(hit) ?? "o código"}`;
+    default: return "Combina com o nome";
   }
 }
 
-/// "Screenshot · Oct 7, 2026 · 1440 × 900 · 62 KB", "PDF · … · 463 pages, 120 read so far · 23 MB"
+/// "Captura de tela · 7 de out. de 2026 · 1440 × 900 · 62 KB", "PDF · … · 463 páginas, 120 lidas até agora · 23 MB"
 function details(hit) {
   const info = hit.info || {};
-  const parts = [KIND_TITLE[hit.kind] || "File", dateOf(hit.modified)];
+  const parts = [KIND_TITLE[hit.kind] || "Arquivo", dateOf(hit.modified)];
   if (info.width && info.height) parts.push(`${info.width} × ${info.height}`);
   const readTo = info.read_to != null ? Number(info.read_to) : null;
   if (info.pages) {
     const pages = Number(info.pages);
-    parts.push((pages === 1 ? "1 page" : `${pages.toLocaleString()} pages`) + (readTo != null ? `, ${readTo} read so far` : ""));
-  } else if (readTo != null) parts.push("partly read so far");
-  if (info.lines) parts.push(Number(info.lines) === 1 ? "1 line" : `${Number(info.lines).toLocaleString()} lines`);
+    parts.push((pages === 1 ? "1 página" : `${pages.toLocaleString("pt-BR")} páginas`) + (readTo != null ? `, ${readTo} lidas até agora` : ""));
+  } else if (readTo != null) parts.push("lido em parte até agora");
+  if (info.lines) parts.push(Number(info.lines) === 1 ? "1 linha" : `${Number(info.lines).toLocaleString("pt-BR")} linhas`);
   if (info.duration) parts.push(clock(Number(info.duration)));
   if (hit.size > 0) parts.push(bytes(hit.size));
   return parts.join(" · ");
@@ -158,7 +158,7 @@ function clock(seconds) {
 }
 
 function dateOf(seconds) {
-  return new Date(seconds * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(seconds * 1000).toLocaleDateString("pt-BR", { year: "numeric", month: "short", day: "numeric" });
 }
 
 /// Sizes the way file managers count them (1 KB = 1,000 bytes): "62 KB", "2.1 MB".
@@ -167,7 +167,7 @@ function bytes(count) {
   const units = ["KB", "MB", "GB", "TB"];
   let value = count / 1000, unit = 0;
   while (value >= 1000 && unit < units.length - 1) { value /= 1000; unit += 1; }
-  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1).replace(".", ",")} ${units[unit]}`;
 }
 
 /// An excerpt with the words keyword search found (marked « ») in bold.
@@ -182,7 +182,7 @@ function foundWords(excerpt) {
 
 /// Words search doesn't look for (the engine's Searcher.stopwords, the same list): without this, "in" or "at" got marked
 /// everywhere and the passage opened at the first "in" instead of the words that matched.
-const STOPWORDS = new Set(["a", "an", "the", "of", "in", "on", "at", "to", "for", "with", "and", "or", "my", "me", "that", "this", "these", "those", "from", "about", "where", "what", "which", "who", "when", "is", "was", "are", "were", "be", "it", "its", "some", "any", "find", "show", "file", "files", "photo", "photos", "picture", "image", "images", "screenshot", "screenshots", "video", "videos", "pdf", "document", "documents", "recording", "এবং", "ও", "এই", "সেই", "একটি", "আমার", "থেকে", "জন্য", "সাথে", "মধ্যে", "কোথায়", "কোন", "কী", "কি", "যে", "ছবি", "স্ক্রিনশট", "ভিডিও", "ফাইল", "পিডিএফ", "في", "من", "على", "الى", "عن", "مع", "هذا", "هذه", "ذلك", "التي", "الذي", "اين", "ما", "صورة", "صور", "لقطة", "شاشة", "فيديو", "ملف", "مستند"]);
+const STOPWORDS = new Set(["a", "an", "the", "of", "in", "on", "at", "to", "for", "with", "and", "or", "my", "me", "that", "this", "these", "those", "from", "about", "where", "what", "which", "who", "when", "is", "was", "are", "were", "be", "it", "its", "some", "any", "find", "show", "file", "files", "photo", "photos", "picture", "image", "images", "screenshot", "screenshots", "video", "videos", "pdf", "document", "documents", "recording", "o", "os", "um", "uma", "uns", "umas", "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "ao", "aos", "pelo", "pela", "por", "para", "com", "sem", "ou", "que", "onde", "qual", "quais", "quem", "quando", "como", "meu", "minha", "meus", "minhas", "esse", "essa", "isso", "este", "esta", "isto", "aquele", "aquela", "foi", "são", "ser", "sobre", "achar", "mostrar", "arquivo", "arquivos", "foto", "fotos", "imagem", "imagens", "captura", "vídeo", "vídeos", "documento", "documentos", "gravação", "এবং", "ও", "এই", "সেই", "একটি", "আমার", "থেকে", "জন্য", "সাথে", "মধ্যে", "কোথায়", "কোন", "কী", "কি", "যে", "ছবি", "স্ক্রিনশট", "ভিডিও", "ফাইল", "পিডিএফ", "في", "من", "على", "الى", "عن", "مع", "هذا", "هذه", "ذلك", "التي", "الذي", "اين", "ما", "صورة", "صور", "لقطة", "شاشة", "فيديو", "ملف", "مستند"]);
 
 /// The query's words, as the preview marks them.
 function queryWords(query) {

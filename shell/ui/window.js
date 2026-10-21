@@ -8,23 +8,23 @@
 const TYPING_PAUSE = 120;   // ms after the last keystroke until the search runs (the query was embedded meanwhile)
 const LIMIT = 120;
 const FILTERS = [
-  { key: "screenshots", title: "Screenshots", kinds: ["screenshot"], icon: "screenshot" },
-  { key: "images", title: "Images", kinds: ["image"], icon: "image" },
-  { key: "documents", title: "Documents", kinds: ["pdf", "doc"], icon: "doc" },
-  { key: "video", title: "Video", kinds: ["video"], icon: "video" },
-  { key: "audio", title: "Audio", kinds: ["audio"], icon: "audio" },
+  { key: "screenshots", title: "Capturas de tela", kinds: ["screenshot"], icon: "screenshot" },
+  { key: "images", title: "Imagens", kinds: ["image"], icon: "image" },
+  { key: "documents", title: "Documentos", kinds: ["pdf", "doc"], icon: "doc" },
+  { key: "video", title: "Vídeo", kinds: ["video"], icon: "video" },
+  { key: "audio", title: "Áudio", kinds: ["audio"], icon: "audio" },
 ];
 const FILTER_OF_KIND = { screenshot: "screenshots", image: "images", pdf: "documents", doc: "documents", video: "video",
                          audio: "audio" };
 const EXAMPLES = [
-  ["a screenshot of an error message", "screenshots"], ["receipt", "documents"], ["whiteboard notes", "images"],
-  ["someone laughing", "audio"], ["a dog on the beach", "video"], ["slides about the budget", "documents"],
+  ["uma captura de tela de mensagem de erro", "screenshots"], ["recibo", "documents"], ["anotações do quadro branco", "images"],
+  ["alguém rindo", "audio"], ["um cachorro na praia", "video"], ["slides sobre o orçamento", "documents"],
 ];
 /// What the home counts, in this order: "136 screenshots, 104 images, 25 PDFs…"
 const KIND_ORDER = ["screenshot", "image", "pdf", "doc", "audio", "video", "code"];
-const COUNTED = { screenshot: ["screenshot", "screenshots"], image: ["image", "images"], pdf: ["PDF", "PDFs"],
-                  doc: ["document", "documents"], audio: ["audio file", "audio files"], video: ["video", "videos"],
-                  code: ["code file", "code files"] };
+const COUNTED = { screenshot: ["captura de tela", "capturas de tela"], image: ["imagem", "imagens"], pdf: ["PDF", "PDFs"],
+                  doc: ["documento", "documentos"], audio: ["arquivo de áudio", "arquivos de áudio"], video: ["vídeo", "vídeos"],
+                  code: ["arquivo de código", "arquivos de código"] };
 const SEARCH_ICON = '<svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="M15 15 L20.5 20.5"/></svg>';
 
 const $ = (id) => document.getElementById(id);
@@ -153,11 +153,11 @@ function render() {
 function renderBar() {
   const code = isCode();
   $("glass").innerHTML = code ? ICONS.code : SEARCH_ICON;
-  $query.placeholder = state.filter === "code" ? "Describe the code: “retry a request with backoff”, a name in it…"
-    : state.info.hasCode ? "Describe it: “zebra in a video”, “code: retry with backoff”…"
-    : "Describe it: “receipt from the hardware store”, “zebra in a video”…";
+  $query.placeholder = state.filter === "code" ? "Descreva o código: “repetir uma requisição com espera crescente”, um nome que esteja nele…"
+    : state.info.hasCode ? "Descreva o que procura: “zebra num vídeo”, “code: repetir com espera crescente”…"
+    : "Descreva o que procura: “recibo da loja de ferragens”, “zebra num vídeo”…";
   $kinds.replaceChildren();
-  $kinds.append(chip("All", null, null, state.filter === null && !code, () => setFilter(null), 1));
+  $kinds.append(chip("Todos", null, null, state.filter === null && !code, () => setFilter(null), 1));
   FILTERS.forEach((filter, index) => {
     const selected = state.filter === filter.key && !code;
     $kinds.append(chip(filter.title, filter.icon, code ? null : state.counts[filter.key], selected,
@@ -165,7 +165,7 @@ function renderBar() {
   });
   if (state.info.hasCode) {
     $kinds.append(element("span", "divider"));
-    $kinds.append(chip("Code", "code", code ? state.counts.code : null, code,
+    $kinds.append(chip("Código", "code", code ? state.counts.code : null, code,
                        () => setFilter(state.filter === "code" ? null : "code"), 7));
   }
 }
@@ -175,7 +175,7 @@ function chip(title, icon, count, selected, action, number) {
   const button = element("button", "chip" + (selected ? " selected" : ""));
   if (icon) button.insertAdjacentHTML("beforeend", ICONS[icon]);
   button.append(title);
-  if (count != null && state.query.trim()) button.append(element("span", "number", count.toLocaleString()));
+  if (count != null && state.query.trim()) button.append(element("span", "number", count.toLocaleString("pt-BR")));
   button.title = `${title} (${MOD}${number})`;
   button.setAttribute("aria-pressed", String(selected));
   button.onclick = action;
@@ -217,7 +217,7 @@ function cell(hit) {
   const item = element("div", "cell" + (hit.path === state.selection ? " selected" : ""));
   item.dataset.path = hit.path;
   item.setAttribute("role", "option");
-  item.setAttribute("aria-label", `${KIND_TITLE[hit.kind] || "File"}, ${nameOf(hit.path)}, ${reasonOf(hit)}`);
+  item.setAttribute("aria-label", `${KIND_TITLE[hit.kind] || "Arquivo"}, ${nameOf(hit.path)}, ${reasonOf(hit)}`);
   const picture = element("div", "picture");
   picture.append(cellPicture(hit));
   if (hit.kind !== "image" && hit.kind !== "screenshot") {
@@ -289,7 +289,7 @@ function weakerToggle() {
   const count = state.weaker.length;
   const toggle = element("button", "weaker-toggle" + (state.showWeaker ? " open" : ""));
   toggle.innerHTML = ICONS.chevron;
-  toggle.append(state.showWeaker ? "Weaker matches" : `${count} weaker ${count === 1 ? "match" : "matches"}`);
+  toggle.append(state.showWeaker ? "Resultados mais fracos" : `${count} ${count === 1 ? "resultado mais fraco" : "resultados mais fracos"}`);
   toggle.onmousedown = (event) => event.preventDefault();
   toggle.onclick = () => {
     state.showWeaker = !state.showWeaker;
@@ -373,11 +373,11 @@ function wire(item, hit) {
     event.preventDefault();
     select(hit.path);
     showMenu(event.clientX, event.clientY, [
-      ["Open", () => open(hit)],
-      [`Show in ${FILE_MANAGER}`, () => reveal(hit)],
+      ["Abrir", () => open(hit)],
+      [`Mostrar no ${FILE_MANAGER}`, () => reveal(hit)],
       null,
-      ["Copy", () => invoke("copy_file", { path: hit.path }).catch(failed)],
-      ["Copy Path", () => navigator.clipboard.writeText(hit.path).catch(() => {})],
+      ["Copiar", () => invoke("copy_file", { path: hit.path }).catch(failed)],
+      ["Copiar caminho", () => navigator.clipboard.writeText(hit.path).catch(() => {})],
     ]);
   };
 }
@@ -425,19 +425,19 @@ function failed(error) {
 function home() {
   const box = element("div", "center home");
   const examples = element("div", "examples");
-  const shown = [...EXAMPLES, ...(state.info.hasCode ? [["code: where the settings are saved", "code"]] : [])];
+  const shown = [...EXAMPLES, ...(state.info.hasCode ? [["code: onde as configurações são salvas", "code"]] : [])];
   for (const [text, kind] of shown) {
     const example = element("button", "example");
     example.innerHTML = ICONS[FILTERS.find((filter) => filter.key === kind)?.icon ?? kind];
     example.append(text);
-    example.title = `Search for “${text}”`;
+    example.title = `Buscar por “${text}”`;
     example.onmousedown = (event) => event.preventDefault();
     example.onclick = () => setQuery(text);
     examples.append(example);
   }
-  box.append(brandMark(), element("h1", "", "Describe it. Dig it up."),
-             element("p", "", "Type what you remember in the search field above: what's in it, what it looks or sounds "
-                     + "like, or words from it."));
+  box.append(brandMark(), element("h1", "", "Descreva. Desenterre."),
+             element("p", "", "Digite no campo acima o que você lembra: o que há nele, como ele parece ou soa, "
+                     + "ou palavras que estão nele."));
   // While DigUp prepares or reads the folders: where it is, rather than a home that looks ready and finds nothing.
   state.card?.stop();
   state.card = null;
@@ -447,7 +447,7 @@ function home() {
     box.append(state.card.node);
     box.classList.add("with-progress");
   }
-  box.append(element("div", "try", "TRY"), examples, about());
+  box.append(element("div", "try", "EXPERIMENTE"), examples, about());
   box.onmousedown = (event) => { if (!event.target.closest("button")) event.preventDefault(); };
   box.onclick = (event) => { if (!event.target.closest("button")) $query.focus(); };
   return box;
@@ -463,20 +463,20 @@ function about() {
     for (const kind of kinds) {
       const item = element("span");
       item.innerHTML = ICONS[kind];
-      item.append(state.indexed[kind].toLocaleString());
+      item.append(state.indexed[kind].toLocaleString("pt-BR"));
       counts.append(item);
     }
     counts.title = kinds.map((kind) => counted(kind, state.indexed[kind])).join(", ");
-    line.append(counts, element("span", "", `in ${folderNames()}`));
+    line.append(counts, element("span", "", `em ${folderNames()}`));
     box.append(line);
   } else if (state.app.searchable > 0) {
-    box.append(element("div", "line", `${state.app.searchable.toLocaleString()} files to search in ${folderNames()}`));
+    box.append(element("div", "line", `${state.app.searchable.toLocaleString("pt-BR")} arquivos para buscar em ${folderNames()}`));
   }
   if (state.info.hotkey) {
     const line = element("div", "line");
     const caps = element("span", "keycaps");
     for (const key of keysOf(state.info.hotkey)) caps.append(element("span", "keycap", key));
-    line.append(caps, element("span", "", "opens DigUp from any app"));
+    line.append(caps, element("span", "", "abre o DigUp de qualquer aplicativo"));
     box.append(line);
   }
   return box;
@@ -484,19 +484,19 @@ function about() {
 
 /// "1 screenshot", "25 PDFs", "6 audio files"
 function counted(kind, count) {
-  const [one, many] = COUNTED[kind] || ["file", "files"];
-  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
+  const [one, many] = COUNTED[kind] || ["arquivo", "arquivos"];
+  return `${count.toLocaleString("pt-BR")} ${count === 1 ? one : many}`;
 }
 
 /// "Pictures, Documents and Videos", or "5 folders".
 function folderNames() {
   const names = state.info.folders.map((folder) => folder.split(/[\\/]/).filter(Boolean).pop() || folder);
-  return names.length <= 3 ? new Intl.ListFormat("en", { type: "conjunction" }).format(names) : `${names.length} folders`;
+  return names.length <= 3 ? new Intl.ListFormat("pt-BR", { type: "conjunction" }).format(names) : `${names.length} pastas`;
 }
 
 /// "Ctrl+Shift+Space" as keys; a Mac's "⇧⌘Space" too.
 function keysOf(hotkey) {
-  if (hotkey.includes("+")) return hotkey.split("+").filter(Boolean);
+  if (hotkey.includes("+")) return hotkey.split("+").filter(Boolean).map((key) => ({ Space: "Espaço", Super: "Win" }[key] || key));
   const signs = [...hotkey.replace(/[^⌃⌥⇧⌘]/g, "")];
   return [...signs, hotkey.replace(/[⌃⌥⇧⌘]/g, "")].filter(Boolean);
 }
@@ -511,18 +511,18 @@ function brandMark() {
 }
 
 function chooseFolders() {
-  const button = element("button", "button primary", "Choose Folders…");
+  const button = element("button", "button primary", "Escolher pastas…");
   button.onclick = () => invoke("choose_folders").catch(failed);
-  return centered(brandMark(), element("h2", "", "Choose folders to search"),
-                  element("p", "", "DigUp only looks where you tell it to."), button);
+  return centered(brandMark(), element("h2", "", "Escolha as pastas para buscar"),
+                  element("p", "", "O DigUp só procura onde você mandar."), button);
 }
 
 function nothingFound() {
   const icon = element("div", "quiet-icon");
   icon.innerHTML = isCode() ? ICONS.code : SEARCH_ICON;
-  const box = centered(icon, element("h3", "", `No good matches for “${state.query.trim()}”`),
-                       element("p", "", isCode() ? "Try saying what the code does, or a name that's in it."
-                         : "Try describing what's in it: what you'd see or hear, or words you remember."));
+  const box = centered(icon, element("h3", "", `Nenhum bom resultado para “${state.query.trim()}”`),
+                       element("p", "", isCode() ? "Tente dizer o que o código faz, ou um nome que esteja nele."
+                         : "Tente descrever o que há nele: o que você veria ou ouviria, ou palavras de que você se lembra."));
   // Nothing found may only mean it isn't read yet: say so, and where to see how far it has got.
   if (!isCode() && DigUpProgress.needed(state.app)) {
     const read = state.app.searchable || 0, total = read + (state.app.pending || 0);
@@ -544,15 +544,15 @@ function codeHintOrOff() {
   icon.innerHTML = ICONS.code;
   if (state.codePhase === "off") {
     const actions = element("div", "actions");
-    const choose = element("button", "primary", "Choose Code Folders…");
+    const choose = element("button", "primary", "Escolher pastas de código…");
     choose.onclick = () => invoke("choose_code_folders").catch(failed);
     actions.append(choose);
-    return centered(icon, element("h3", "", "Code search is off"),
-                    element("p", "", "DigUp can find code by what it does, in folders you choose for it. Code gets an "
-                            + "index of its own and never shows up in other searches."), actions);
+    return centered(icon, element("h3", "", "A busca de código está desativada"),
+                    element("p", "", "O DigUp acha código pelo que ele faz, nas pastas que você escolher para isso. O código "
+                            + "tem um índice próprio e nunca aparece em outras buscas."), actions);
   }
-  return centered(icon, element("h3", "", "Search your code"),
-                  element("p", "", "Say what the code does, or type a name that's in it."));
+  return centered(icon, element("h3", "", "Busque no seu código"),
+                  element("p", "", "Diga o que o código faz, ou digite um nome que esteja nele."));
 }
 
 function centered(...children) {
@@ -591,7 +591,7 @@ function previewPicture(hit) {
   if (hit.segment === "chunk") {
     box.append(passage(hit));
     const parts = Number(hit.info?.chunks || 0);
-    if (hit.loc != null && parts > 1) addPlace(box, `Part ${Math.trunc(hit.loc)} of ${parts}`);
+    if (hit.loc != null && parts > 1) addPlace(box, `Parte ${Math.trunc(hit.loc)} de ${parts}`);
     return box;
   }
   const what = renderOf(hit);
@@ -627,7 +627,7 @@ function previewPicture(hit) {
     // ▶ plays it here from the moment that matched.
     const play = element("button", "play");
     play.innerHTML = ICONS.play;
-    play.title = `Play from ${clock(hit.loc ?? 0)}`;
+    play.title = `Reproduzir a partir de ${clock(hit.loc ?? 0)}`;
     play.onclick = () => {
       const video = element("video");
       video.src = `${fileURL(hit.path)}#t=${hit.loc ?? 0}`;
@@ -671,10 +671,10 @@ function renderBig() {
   title.append(element("span", "name", nameOf(hit.path)));
   const place = placeOf(hit);
   if (place) title.append(element("span", "place", place));
-  const opening = element("button", "primary", "Open");
+  const opening = element("button", "primary", "Abrir");
   opening.onclick = () => { closeBig(); open(hit); };
   const close = element("button", "close", "×");
-  close.title = "Close (Space)";
+  close.title = "Fechar (Espaço)";
   close.onclick = closeBig;
   head.append(title, opening, close);
   sheet.append(head, bigView(hit));
@@ -738,7 +738,7 @@ function momentBar(start, end, duration, playhead) {
     head.style.left = `${Math.max(0, Math.min(1, playhead / duration)) * 100}%`;
     bar.append(head);
   }
-  bar.title = `At ${clock(start)} of ${clock(duration)}`;
+  bar.title = `Em ${clock(start)} de ${clock(duration)}`;
   return bar;
 }
 
@@ -752,9 +752,9 @@ function audioMoment(hit) {
   wave.innerHTML = ICONS.audio;
   const toggle = element("button", "toggle play-icon");
   toggle.innerHTML = ICONS.play;
-  toggle.title = `Play from ${clock(start)}`;
+  toggle.title = `Reproduzir a partir de ${clock(start)}`;
   controls.append(wave, toggle);
-  const line = element("div", "span", `${clock(start)} – ${clock(end)}` + (duration ? ` of ${clock(duration)}` : ""));
+  const line = element("div", "span", `${clock(start)} – ${clock(end)}` + (duration ? ` de ${clock(duration)}` : ""));
   let bar = duration > 0 ? momentBar(start, end, duration) : null;
   box.append(controls, ...(bar ? [bar] : []), line);
   const showPlaying = () => {
@@ -766,7 +766,7 @@ function audioMoment(hit) {
     if (!playing) {
       const audio = new Audio(`${fileURL(hit.path)}#t=${start}`);
       audio.ontimeupdate = () => {
-        line.textContent = `${clock(audio.currentTime)} – playing from ${clock(start)}`;
+        line.textContent = `${clock(audio.currentTime)} – tocando a partir de ${clock(start)}`;
         if (bar) {
           const moved = momentBar(start, end, duration, audio.currentTime);
           bar.replaceWith(moved);
@@ -846,7 +846,7 @@ function facts(hit) {
   const title = element("div", "title", "‎" + nameOf(hit.path));
   title.title = nameOf(hit.path);
   const folder = folderLine(folderOf(hit), "button");
-  folder.title = `Show in ${FILE_MANAGER}`;
+  folder.title = `Mostrar no ${FILE_MANAGER}`;
   folder.onclick = () => reveal(hit);
   box.append(title, folder, element("div", "details", details(hit)));
   return box;
@@ -871,9 +871,9 @@ function why(hit) {
 
 function actions(hit) {
   const box = element("div", "actions");
-  const openButton = element("button", "primary", "Open");
+  const openButton = element("button", "primary", "Abrir");
   openButton.onclick = () => open(hit);
-  const revealButton = element("button", "", `Show in ${FILE_MANAGER}`);
+  const revealButton = element("button", "", `Mostrar no ${FILE_MANAGER}`);
   revealButton.onclick = () => reveal(hit);
   box.append(openButton, revealButton);
   return box;
@@ -905,11 +905,11 @@ function renderStatus() {
       + `cy="6" r="4.6" stroke-dasharray="${(length * Math.max(0.02, app.progress)).toFixed(2)} ${length.toFixed(2)}"/></svg>`;
   }
   let count = "";
-  if (state.error) count = `DigUp's helper: ${state.error}`;
+  if (state.error) count = `Motor do DigUp: ${state.error}`;
   else if (state.hasResults && state.query.trim()) {
     const strong = state.ranked.length, weaker = state.weaker.length;
-    count = app.caveat || (!state.meaning ? "Words only: meaning search isn't available"
-      : `${strong} ${strong === 1 ? "result" : "results"}` + (weaker ? ` · ${weaker} weaker` : ""));
+    count = app.caveat || (!state.meaning ? "Só por palavras: a busca por sentido não está disponível"
+      : `${strong} ${strong === 1 ? "resultado" : "resultados"}` + (weaker ? ` · ${weaker} ${weaker === 1 ? "mais fraco" : "mais fracos"}` : ""));
   }
   $("count").textContent = count;
   renderUpdate(app.update);
@@ -921,8 +921,8 @@ function renderUpdate(update) {
   button.hidden = !update;
   if (!update) return;
   const text = update.state === "downloading"
-    ? `Downloading DigUp ${update.version}…` + (update.percent != null ? ` ${update.percent}%` : "")
-    : update.state === "installing" ? `Installing DigUp ${update.version}…` : `DigUp ${update.version} is available`;
+    ? `Baixando o DigUp ${update.version}…` + (update.percent != null ? ` ${update.percent}%` : "")
+    : update.state === "installing" ? `Instalando o DigUp ${update.version}…` : `O DigUp ${update.version} está disponível`;
   button.innerHTML = '<svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="currentColor"/>'
     + '<path d="M6 3v5M3.8 6l2.2 2.2L8.2 6" fill="none" stroke="white" stroke-width="1.4" stroke-linecap="round" '
     + 'stroke-linejoin="round"/></svg>';
@@ -967,18 +967,18 @@ function showMainMenu() {
   const button = $("more").getBoundingClientRect();
   const folders = state.info.folders.length > 0, paused = state.app.paused === true;
   showMenu(button.right - 200, button.bottom + 4, [
-    ["Choose Folders…", () => invoke("choose_folders").catch(failed)],
-    ["Index Now", () => invoke("index_now").catch(failed), null, folders && state.app.busy === false],
-    [paused ? "Resume Indexing" : "Pause Indexing", () => invoke("pause_indexing", { paused: !paused }).catch(failed),
+    ["Escolher pastas…", () => invoke("choose_folders").catch(failed)],
+    ["Indexar agora", () => invoke("index_now").catch(failed), null, folders && state.app.busy === false],
+    [paused ? "Retomar a indexação" : "Pausar a indexação", () => invoke("pause_indexing", { paused: !paused }).catch(failed),
      null, folders],
     null,
-    ["Settings…", () => invoke("open_settings").catch(failed), `${MOD},`],
+    ["Configurações…", () => invoke("open_settings").catch(failed), `${MOD},`],
     state.app.update
-      ? [`Update to DigUp ${state.app.update.version}…`, () => invoke("offer_update").catch(failed), null,
+      ? [`Atualizar para o DigUp ${state.app.update.version}…`, () => invoke("offer_update").catch(failed), null,
          state.app.update.state === "available"]
-      : ["Check for Updates…", () => invoke("check_for_updates").catch(failed)],
+      : ["Verificar atualizações…", () => invoke("check_for_updates").catch(failed)],
     null,
-    ["Quit DigUp", () => invoke("quit_app").catch(failed)],
+    ["Sair do DigUp", () => invoke("quit_app").catch(failed)],
   ]);
 }
 
@@ -1002,7 +1002,7 @@ $("toggle-preview").onclick = () => {
 };
 $("settings").onmousedown = (event) => event.preventDefault();
 $("settings").onclick = () => invoke("open_settings").catch(failed);
-$("settings").title = `Settings (${MOD},)`;
+$("settings").title = `Configurações (${MOD},)`;
 $("more").onmousedown = (event) => event.preventDefault();
 $("more").onclick = () => ($menu.hidden ? showMainMenu() : hideMenu());
 $("status-line").onclick = () => invoke("choose_folders").catch(failed);
@@ -1012,7 +1012,7 @@ $kinds.onmousedown = (event) => event.preventDefault();
 function updatePreviewButton() {
   const button = $("toggle-preview");
   button.setAttribute("aria-pressed", String(state.showsPreview));
-  button.title = state.showsPreview ? "Hide Preview" : "Show Preview";
+  button.title = state.showsPreview ? "Ocultar a prévia" : "Mostrar a prévia";
   button.setAttribute("aria-label", button.title);
 }
 
