@@ -302,11 +302,11 @@ async fn estimate(shell: State<'_, Arc<Shell>>, folders: Vec<String>, code: Opti
             command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
         let child = command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).spawn()
-            .map_err(|error| format!("can't run {}: {error}", helper.display()))?;
+            .map_err(|error| format!("não foi possível executar {}: {error}", helper.display()))?;
         helper::adopt(&child);
         // Its window closed meanwhile: it ends, rather than go on walking the folders over the indexing.
         let output = helper::output_unless(child, || walking.estimate_generation.load(Ordering::SeqCst) != generation)
-            .map_err(|error| format!("can't run {}: {error}", helper.display()))?;
+            .map_err(|error| format!("não foi possível executar {}: {error}", helper.display()))?;
         Ok(output.map_or_else(Vec::new, |bytes| {
             String::from_utf8_lossy(&bytes).lines().filter_map(|line| serde_json::from_str(line).ok()).collect()
         }))
@@ -367,7 +367,7 @@ fn apply_setup_folders(app: AppHandle, shell: State<'_, Arc<Shell>>, folders: Ve
         let mut settings = shell.settings.lock().unwrap();
         settings.folders = folders;
         settings.skipped = skipped;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     apply_folders(&app);
     Ok(())
@@ -381,7 +381,7 @@ fn finish_setup(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Result<(), Stri
     if first {
         let mut settings = shell.settings.lock().unwrap();
         settings.set_up = true;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     // The first setup has DigUp open at login (it lives in the tray; Settings turns that off), as the Mac app does.
     if first && shell.opens_at_login() {
@@ -396,7 +396,7 @@ fn finish_setup(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Result<(), Stri
     #[cfg(target_os = "linux")]
     if first && shell.shortcut == Method::Gnome && !shell.dev_run() {
         if let Err(error) = hotkey::gnome::bind(&shell.hotkey(), &hotkey::toggle_command()) {
-            set_status(&app, &format!("The shortcut couldn't be added to GNOME's settings: {error}"));
+            set_status(&app, &format!("Não foi possível adicionar o atalho às configurações do GNOME: {error}"));
         }
     }
     if let Some(window) = app.get_webview_window("setup") {
@@ -796,7 +796,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         Method::Grab => {
             let hotkey = shell.hotkey();
             if let Err(error) = app.global_shortcut().register(hotkey.as_str()) {
-                set_status(&handle, &format!("The shortcut {} is taken", shortcut_text(&hotkey)));
+                set_status(&handle, &format!("O atalho {} já está em uso", shortcut_text(&hotkey)));
                 eprintln!("digup-shell: can't use {hotkey} as the shortcut: {error}");
             }
         }
@@ -808,7 +808,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         Method::Kde => {
             let pressed = handle.clone();
             if let Err(error) = hotkey::kde::listen(&shell.hotkey(), move || toggle_panel(&pressed)) {
-                set_status(&handle, &format!("The shortcut couldn't be added to KDE's settings: {error}"));
+                set_status(&handle, &format!("Não foi possível adicionar o atalho às configurações do KDE: {error}"));
                 eprintln!("digup-shell: can't add the shortcut to KDE's: {error}");
             }
         }
@@ -939,7 +939,7 @@ fn run_index(app: &AppHandle) {
             shell.status.lock().unwrap().helper_started_at(status::now_ms());
             changed(app);
         }
-        Err(error) => set_status(app, &format!("Indexing couldn't start: {error}")),
+        Err(error) => set_status(app, &format!("A indexação não conseguiu começar: {error}")),
     }
 }
 
@@ -950,7 +950,7 @@ fn sync_code(app: &AppHandle) {
         return;
     }
     if let Err(error) = shell.index.sync_code(&shell.index_launch()) {
-        set_status(app, &format!("Indexing couldn't start: {error}"));
+        set_status(app, &format!("A indexação não conseguiu começar: {error}"));
     }
 }
 
@@ -1189,7 +1189,7 @@ fn show_code_folders(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     WebviewWindowBuilder::new(app, "code-folders", WebviewUrl::App("setup.html?code".into()))
-        .title("Code Folders")
+        .title("Pastas de código")
         .inner_size(720.0, 600.0)
         .resizable(false)
         .maximizable(false)
@@ -1207,7 +1207,7 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
     }
     let hidden = app.state::<Arc<Shell>>().options.debug_setup;
     WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
-        .title("Set Up DigUp")
+        .title("Configurar o DigUp")
         .inner_size(720.0, 600.0)
         .resizable(false)
         .maximizable(false)
@@ -1237,7 +1237,7 @@ fn show_settings(app: &AppHandle) -> tauri::Result<()> {
     }
     let options = &app.state::<Arc<Shell>>().options;
     WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("DigUp Settings")
+        .title("Configurações do DigUp")
         .inner_size(660.0, 620.0)
         .resizable(false)
         .maximizable(false)
@@ -1331,19 +1331,19 @@ fn hold_hotkey(app: AppHandle, shell: State<'_, Arc<Shell>>, held: bool) {
 #[tauri::command]
 fn set_hotkey(app: AppHandle, shell: State<'_, Arc<Shell>>, hotkey: String) -> Result<String, String> {
     if shell.shortcut != Method::Grab {
-        return Err("This desktop keeps the shortcut in its own settings.".into());
+        return Err("Este ambiente de desktop guarda o atalho nas próprias configurações.".into());
     }
     let old = shell.hotkey();
     if hotkey != old {
         let shortcuts = app.global_shortcut();
         shortcuts.register(hotkey.as_str())
-            .map_err(|_| format!("{} can't be used: another app may have it.", shortcut_text(&hotkey)))?;
+            .map_err(|_| format!("{} não pode ser usado: outro aplicativo pode estar com ele.", shortcut_text(&hotkey)))?;
         if shortcuts.is_registered(old.as_str()) {
             let _ = shortcuts.unregister(old.as_str());
         }
         let mut settings = shell.settings.lock().unwrap();
         settings.hotkey = hotkey;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     Ok(shell.hotkey_text())
 }
@@ -1356,7 +1356,7 @@ fn remove_folder(app: AppHandle, shell: State<'_, Arc<Shell>>, folder: String) -
         let inside = |path: &str| Path::new(path).starts_with(&folder);
         settings.folders.retain(|path| path != &folder);
         settings.skipped.retain(|path| !inside(path));
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     shell.prune.store(true, Ordering::SeqCst);
     apply_folders(&app);
@@ -1408,7 +1408,7 @@ fn set_code_folders(app: AppHandle, shell: State<'_, Arc<Shell>>, folders: Vec<S
         settings.code_folders = folders;
         settings.code_skipped = skipped;
         settings.delete_code_index = false;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     apply_folders(&app);
     Ok(())
@@ -1429,7 +1429,7 @@ fn remove_code_folder(app: AppHandle, shell: State<'_, Arc<Shell>>, folder: Stri
         let inside = |path: &str| Path::new(path).starts_with(&folder);
         settings.code_folders.retain(|path| path != &folder);
         settings.code_skipped.retain(|path| !inside(path));
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
         settings.code_folders.is_empty()
     };
     if off {
@@ -1449,7 +1449,7 @@ fn turn_off_code(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Result<(), Str
         settings.code_folders.clear();
         settings.code_skipped.clear();
         settings.delete_code_index = true;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     let shell = shell.inner().clone();
     let request = folders_request(&shell);
@@ -1468,7 +1468,7 @@ fn turn_off_code(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Result<(), Str
 fn set_tray_click(shell: State<'_, Arc<Shell>>, click: String) -> Result<(), String> {
     let mut settings = shell.settings.lock().unwrap();
     settings.tray_click = if click == "panel" { click } else { String::new() };
-    settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))
+    settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))
 }
 
 /// Check for Updates… (the tray, the window's ⋯, Settings): the answer is shown, and an update found is offered.
@@ -1488,7 +1488,7 @@ fn offer_update(app: AppHandle) {
 fn set_update_checks(shell: State<'_, Arc<Shell>>, on: bool) -> Result<(), String> {
     let mut settings = shell.settings.lock().unwrap();
     settings.update_checks_off = !on;
-    settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))
+    settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))
 }
 
 /// Settings → Code: the editor code results open in (an editor's id, or "default" for the file's default app).
@@ -1496,7 +1496,7 @@ fn set_update_checks(shell: State<'_, Arc<Shell>>, on: bool) -> Result<(), Strin
 fn set_code_editor(shell: State<'_, Arc<Shell>>, editor: String) -> Result<(), String> {
     let mut settings = shell.settings.lock().unwrap();
     settings.code_editor = editor;
-    settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))
+    settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))
 }
 
 /// Settings → Folders: the folders skipped inside the ones searched.
@@ -1505,7 +1505,7 @@ fn set_skipped(app: AppHandle, shell: State<'_, Arc<Shell>>, skipped: Vec<String
     {
         let mut settings = shell.settings.lock().unwrap();
         settings.skipped = skipped;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     apply_folders(&app);
     Ok(())
@@ -1526,7 +1526,7 @@ fn set_skip_types(app: AppHandle, shell: State<'_, Arc<Shell>>, types: String) -
             return Ok(list);
         }
         settings.skip_types = list.clone();
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     apply_folders(&app);
     Ok(list)
@@ -1539,7 +1539,7 @@ fn set_index_hours(app: AppHandle, shell: State<'_, Arc<Shell>>, on: bool, start
         let mut settings = shell.settings.lock().unwrap();
         settings.index_hours_on = on;
         settings.index_hours = hours::Hours { start: start % 1440, end: end % 1440 };
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     held_now(&app);
     Ok(())
@@ -1602,7 +1602,7 @@ fn set_processor_only(app: AppHandle, shell: State<'_, Arc<Shell>>, on: bool) ->
     {
         let mut settings = shell.settings.lock().unwrap();
         settings.processor_only = on;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     shell.search.stop();
     shell.index.stop();
@@ -1615,7 +1615,7 @@ fn set_center_panel(app: AppHandle, shell: State<'_, Arc<Shell>>, on: bool) -> R
     {
         let mut settings = shell.settings.lock().unwrap();
         settings.center_panel = on;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        settings.save(&shell.settings_path).map_err(|error| format!("não foi possível salvar as configurações: {error}"))?;
     }
     later(&app, remake_panel);
     Ok(())
@@ -1649,17 +1649,17 @@ fn shortcut_text(accelerator: &str) -> String {
 // MARK: The tray
 
 fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
+    let status = MenuItem::with_id(app, "status", "Iniciando…", false, None::<&str>)?;
     // The shortcut beside Search… only where DigUp grabs it: elsewhere the desktop has it, maybe changed there.
     let accelerator = (shell.shortcut == Method::Grab).then(|| shell.hotkey());
-    let search = MenuItem::with_id(app, "search", "Search…", true, accelerator.as_deref())?;
-    let open = MenuItem::with_id(app, "open", "Open DigUp", true, None::<&str>)?;
-    let folders = MenuItem::with_id(app, "folders", "Choose Folders…", true, None::<&str>)?;
-    let index = MenuItem::with_id(app, "index", "Index Now", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "Pause Indexing", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
-    let check = MenuItem::with_id(app, "check", "Check for Updates…", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit DigUp", true, None::<&str>)?;
+    let search = MenuItem::with_id(app, "search", "Buscar…", true, accelerator.as_deref())?;
+    let open = MenuItem::with_id(app, "open", "Abrir o DigUp", true, None::<&str>)?;
+    let folders = MenuItem::with_id(app, "folders", "Escolher pastas…", true, None::<&str>)?;
+    let index = MenuItem::with_id(app, "index", "Indexar agora", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", "Pausar a indexação", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Configurações…", true, None::<&str>)?;
+    let check = MenuItem::with_id(app, "check", "Verificar atualizações…", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Sair do DigUp", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
@@ -1785,7 +1785,7 @@ fn changed(app: &AppHandle) {
         let _ = index.set_enabled(folders && snapshot["busy"] == false);
     }
     if let Some(pause) = shell.pause_item.lock().unwrap().as_ref() {
-        let _ = pause.set_text(if snapshot["paused"] == true { "Resume Indexing" } else { "Pause Indexing" });
+        let _ = pause.set_text(if snapshot["paused"] == true { "Retomar a indexação" } else { "Pausar a indexação" });
         let _ = pause.set_enabled(folders);
     }
     update_line(app, &shell);

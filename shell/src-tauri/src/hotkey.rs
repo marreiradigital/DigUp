@@ -155,7 +155,7 @@ pub mod gnome {
                 "shift" => "<Shift>",
                 "alt" | "option" => "<Alt>",
                 "super" | "meta" | "command" | "cmd" => "<Super>",
-                _ => return Err(format!("{accelerator}: {modifier} isn't a key GNOME knows")),
+                _ => return Err(format!("{accelerator}: {modifier} não é uma tecla que o GNOME conhece")),
             });
         }
         let lower = key.to_ascii_lowercase();
@@ -175,7 +175,7 @@ pub mod gnome {
             (Some(name), _) => text.push_str(name),
             (None, Some(number)) => text.push_str(&format!("F{number}")),
             _ if plain => text.push_str(&lower),
-            _ => return Err(format!("{accelerator}: {key} isn't a key GNOME knows")),
+            _ => return Err(format!("{accelerator}: {key} não é uma tecla que o GNOME conhece")),
         }
         Ok(text)
     }
@@ -208,7 +208,7 @@ pub mod kde {
 
     const SERVICE: &str = "org.kde.kglobalaccel";
     /// The component, the action, and their names as System Settings shows them (sent as a slice: `as` on D-Bus).
-    const ACTION: [&str; 4] = ["com.abdurrahim.DigUp", "toggle-panel", "DigUp", "Show or Hide the Search Panel"];
+    const ACTION: [&str; 4] = ["com.abdurrahim.DigUp", "toggle-panel", "DigUp", "Mostrar ou ocultar o painel de busca"];
     // KGlobalAccel's flags (kglobalacceld.h), and Qt's modifiers in a key code.
     const SET_PRESENT: u32 = 2;
     const IS_DEFAULT: u32 = 8;
@@ -301,7 +301,7 @@ pub mod kde {
                 "shift" => SHIFT,
                 "alt" | "option" => ALT,
                 "super" | "meta" | "command" | "cmd" => META,
-                _ => return Err(format!("{accelerator}: {modifier} isn't a key KDE knows")),
+                _ => return Err(format!("{accelerator}: {modifier} não é uma tecla que o KDE conhece")),
             };
         }
         let upper = key.to_ascii_uppercase();
@@ -316,7 +316,7 @@ pub mod kde {
             ("COMMA", _) => 0x2c,
             (_, Some(number)) => F1 + number - 1,
             (one, None) if one.len() == 1 && one.chars().all(|c| c.is_ascii_alphanumeric()) => one.as_bytes()[0] as i32,
-            _ => return Err(format!("{accelerator}: {key} isn't a key KDE knows")),
+            _ => return Err(format!("{accelerator}: {key} não é uma tecla que o KDE conhece")),
         };
         Ok(code)
     }

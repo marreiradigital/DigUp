@@ -58,11 +58,11 @@ impl Updates {
         let version = &found.as_ref()?.version;
         Some(match *self.phase.lock().unwrap() {
             Phase::Downloading => match *self.percent.lock().unwrap() {
-                Some(percent) => (format!("Downloading DigUp {version}… {percent}%"), false),
-                None => (format!("Downloading DigUp {version}…"), false),
+                Some(percent) => (format!("Baixando o DigUp {version}… {percent}%"), false),
+                None => (format!("Baixando o DigUp {version}…"), false),
             },
-            Phase::Installing => (format!("Installing DigUp {version}…"), false),
-            _ => (format!("Update to DigUp {version}…"), true),
+            Phase::Installing => (format!("Instalando o DigUp {version}…"), false),
+            _ => (format!("Atualizar para o DigUp {version}…"), true),
         })
     }
 }
@@ -185,13 +185,13 @@ pub async fn check(app: &AppHandle, asked: bool) {
             *shell.updates.found.lock().unwrap() = None;
             changed(app);
             if asked {
-                tell(app, "You're up to date", &format!("DigUp {} is the newest version.", app.package_info().version));
+                tell(app, "Você está em dia", &format!("O DigUp {} é a versão mais nova.", app.package_info().version));
             }
         }
         Err(error) => {
             log(&shell, &format!("couldn't check: {error}"));
             if asked {
-                tell(app, "Check for Updates", &format!("DigUp couldn't check for updates: {error}"));
+                tell(app, "Verificar atualizações", &format!("O DigUp não conseguiu verificar as atualizações: {error}"));
             }
         }
     }
@@ -205,20 +205,20 @@ pub fn offer(app: &AppHandle) {
         return;   // already on its way
     }
     let installs = installs_itself();
-    let mut text = format!("DigUp {} is available. You have {}.", update.version, app.package_info().version);
+    let mut text = format!("O DigUp {} está disponível. Você está com a versão {}.", update.version, app.package_info().version);
     if let Some(notes) = update.body.as_deref().map(str::trim).filter(|notes| !notes.is_empty()) {
         text.push_str("\n\n");
         text.push_str(notes);
     }
     if !installs {
-        text.push_str("\n\nDownload the new package from its release page and install it as you installed this one.");
+        text.push_str("\n\nBaixe o novo pacote da página de lançamentos e instale-o do mesmo jeito que você instalou este.");
     }
-    let (yes, no) = if installs { ("Install and Restart", "Not Now") } else { ("Download…", "Not Now") };
+    let (yes, no) = if installs { ("Instalar e reiniciar", "Agora não") } else { ("Baixar…", "Agora não") };
     let app = app.clone();
     app.clone()
         .dialog()
         .message(text)
-        .title("DigUp Update")
+        .title("Atualização do DigUp")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::OkCancelCustom(yes.into(), no.into()))
         .show(move |yes| {
@@ -273,7 +273,7 @@ pub async fn install(app: &AppHandle) {
     // The signature is checked as the download ends: a file that doesn't match it never gets here.
     let bytes = match downloaded {
         Ok(bytes) => bytes,
-        Err(error) => return failed(app, &format!("couldn't download {}: {error}", update.version)),
+        Err(error) => return failed(app, &format!("não foi possível baixar a versão {}: {error}", update.version)),
     };
     *shell.updates.phase.lock().unwrap() = Phase::Installing;
     changed(app);
@@ -283,7 +283,7 @@ pub async fn install(app: &AppHandle) {
             log(&shell, "starting again");
             app.restart();
         }
-        Err(error) => failed(app, &format!("couldn't install {}: {error}", update.version)),
+        Err(error) => failed(app, &format!("não foi possível instalar a versão {}: {error}", update.version)),
     }
 }
 
@@ -295,7 +295,7 @@ fn failed(app: &AppHandle, problem: &str) {
     *shell.updates.percent.lock().unwrap() = None;
     changed(app);
     if !shell.options.debug_update_install {
-        tell(app, "DigUp Update", &format!("The update didn't go through: {problem}"));
+        tell(app, "Atualização do DigUp", &format!("A atualização não deu certo: {problem}"));
     }
 }
 

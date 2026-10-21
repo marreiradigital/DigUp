@@ -22,7 +22,7 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
-    "shortDescription": "Search your files by what's in them, on your computer",
+    "shortDescription": "Busque nos seus arquivos pelo que há neles, no seu computador",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -31,7 +31,7 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "nsis": { "installerHooks": "windows/hooks.nsh" }
+      "nsis": { "installerHooks": "windows/hooks.nsh", "languages": ["PortugueseBR"] }
     }
   },
   "plugins": {

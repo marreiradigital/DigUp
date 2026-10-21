@@ -57,7 +57,7 @@ impl Launch {
                 });
             }
         }
-        let mut child = command.spawn().map_err(|error| format!("can't start {}: {error}", self.program.display()))?;
+        let mut child = command.spawn().map_err(|error| format!("não foi possível iniciar {}: {error}", self.program.display()))?;
         #[cfg(windows)]
         job::add(&child);
         let stdin = child.stdin.take().ok_or("no stdin")?;
@@ -144,7 +144,7 @@ impl SearchService {
         let reply = self.send(id, &request)?;
         let reply = reply.await.map_err(|_| "DigUp's helper stopped".to_string())?;
         match reply.get("ok") {
-            Some(Value::Bool(false)) => Err(reply["error"].as_str().unwrap_or("the helper failed").to_string()),
+            Some(Value::Bool(false)) => Err(reply["error"].as_str().unwrap_or("o motor falhou").to_string()),
             _ => Ok(reply),
         }
     }
@@ -165,7 +165,7 @@ impl SearchService {
         if let Err(error) = writeln!(searching.stdin, "{request}").and_then(|_| searching.stdin.flush()) {
             searching.pending.lock().unwrap().remove(&id);
             *running = None;
-            return Err(format!("DigUp's helper isn't answering: {error}"));
+            return Err(format!("o motor não está respondendo: {error}"));
         }
         Ok(receiver)
     }

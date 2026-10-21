@@ -23,7 +23,7 @@ pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), Strin
     unsafe {
         let memory = GlobalAlloc(GMEM_MOVEABLE, header + names.len() * 2);
         if memory.is_null() {
-            return Err("no memory for the clipboard".into());
+            return Err("sem memória para a área de transferência".into());
         }
         let start = GlobalLock(memory) as *mut u8;
         start.cast::<DROPFILES>().write(DROPFILES { pFiles: header as u32, pt: POINT { x: 0, y: 0 }, fNC: 0, fWide: 1 });
@@ -32,14 +32,14 @@ pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), Strin
         // The window owns the clipboard: without an owner, Windows won't take the data.
         if OpenClipboard(owner) == 0 {
             GlobalFree(memory);
-            return Err("the clipboard is busy".into());
+            return Err("a área de transferência está ocupada".into());
         }
         EmptyClipboard();
         let taken = !SetClipboardData(CF_HDROP, memory).is_null();
         CloseClipboard();
         if !taken {
             GlobalFree(memory);
-            return Err("the clipboard didn't take the file".into());
+            return Err("a área de transferência não aceitou o arquivo".into());
         }
     }
     Ok(())
@@ -73,5 +73,5 @@ pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), Strin
 
 #[cfg(not(any(windows, target_os = "linux")))]
 pub fn copy_file(_: &tauri::WebviewWindow, _: &Path) -> Result<(), String> {
-    Err("the shell copies files on Windows and Linux (on a Mac, the DigUp app does)".into())
+    Err("o shell copia arquivos no Windows e no Linux (no Mac, quem copia é o app DigUp)".into())
 }
