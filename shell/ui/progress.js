@@ -53,11 +53,11 @@ const DigUpProgress = (() => {
     return rest ? `cerca de ${hours} h ${rest} min` : `cerca de ${hours} h`;
   }
 
-  /// Is there anything to tell: not when everything is read and DigUp is idle.
+  /// Is there anything to tell: not when everything is read, whether DigUp is idle, paused or held (nothing is waiting).
   function needed(app) {
     const phase = app && app.phase;
     if (!phase || phase === "nofolders") return false;
-    return phase !== "idle" || (app.pending || 0) > 0;
+    return !["idle", "paused", "held"].includes(phase) || (app.pending || 0) > 0;
   }
 
   /// `options.openSettings`: what the "Ajustes" button does. Returns the card's node, `update(app, roots)` to redraw it
@@ -104,6 +104,8 @@ const DigUpProgress = (() => {
           }
           break;
         case "starting":
+          box.append(bar(null), el("p", "pg-line", "Iniciando o leitor de arquivos…"));
+          break;
         case "scanning":
           box.append(bar(null), el("p", "pg-line", `Percorrendo as pastas há ${duration(since)}…`),
                      el("p", "pg-note", "O DigUp anda por todos os arquivos antes de ler o primeiro. Em pastas grandes isso "
