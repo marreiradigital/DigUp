@@ -108,8 +108,8 @@ const DigUpProgress = (() => {
           break;
         case "scanning":
           box.append(bar(null), el("p", "pg-line", `Percorrendo as pastas há ${duration(since)}…`),
-                     el("p", "pg-note", "O DigUp anda por todos os arquivos antes de ler o primeiro. Em pastas grandes isso "
-                       + "leva vários minutos, e nada aparece aqui até o fim dessa etapa. Só acontece na primeira vez."));
+                     el("p", "pg-note", "A cada partida o DigUp confere os arquivos das pastas antes de ler o próximo. Na "
+                       + "primeira vez, em pastas grandes, isso leva vários minutos, e nada aparece aqui até o fim dessa etapa."));
           break;
         case "indexing":
         case "finishing": {
